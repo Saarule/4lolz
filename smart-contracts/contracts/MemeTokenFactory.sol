@@ -9,7 +9,7 @@ contract MemeToken {
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
     string public memeUri;
-    uint256 public memeScore;
+    string public description;
 
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
@@ -19,15 +19,19 @@ contract MemeToken {
         string memory _symbol, 
         uint256 _initialSupply, 
         string memory _memeUri, 
-        uint256 _memeScore,
+        string memory _description,
         address _creator
     ) {
+        require(bytes(_name).length > 0, "Name cannot be empty");
+        require(bytes(_symbol).length > 0, "Symbol cannot be empty");
         require(_initialSupply > 0, "Initial supply must be greater than zero");
-        require(_memeScore <= 100, "Meme score must be between 0 and 100");
+        require(bytes(_memeUri).length > 0, "Meme URI cannot be empty");
+        require(bytes(_description).length <= 280, "Description must be 280 characters or less");
+        
         name = _name;
         symbol = _symbol;
         memeUri = _memeUri;
-        memeScore = _memeScore;
+        description = _description;
         balanceOf[_creator] = _initialSupply;
         totalSupply = _initialSupply;
         emit Transfer(address(0), _creator, _initialSupply);
@@ -64,21 +68,27 @@ contract MemeTokenFactory {
     mapping(uint256 => address) public memeTokens;
     mapping(address => uint256[]) public creatorTokens;
 
-    event MemeTokenCreated(uint256 indexed tokenId, address tokenAddress, string name, string symbol, string memeUri, uint256 memeScore);
+    event MemeTokenCreated(uint256 indexed tokenId, address tokenAddress, string name, string symbol, string memeUri, string description);
 
     function createMemeToken(
         string memory name, 
         string memory symbol, 
         uint256 initialSupply, 
         string memory memeUri, 
-        uint256 memeScore
+        string memory description
     ) external returns (uint256) {
-        MemeToken newToken = new MemeToken(name, symbol, initialSupply, memeUri, memeScore, msg.sender);
+        require(bytes(name).length > 0, "Name cannot be empty");
+        require(bytes(symbol).length > 0 && bytes(symbol).length <= 5, "Symbol must be between 1 and 5 characters");
+        require(initialSupply > 0, "Initial supply must be greater than zero");
+        require(bytes(memeUri).length > 0, "Meme URI cannot be empty");
+        require(bytes(description).length <= 280, "Description must be 280 characters or less");
+
+        MemeToken newToken = new MemeToken(name, symbol, initialSupply, memeUri, description, msg.sender);
         tokenCount++;
         memeTokens[tokenCount] = address(newToken);
         creatorTokens[msg.sender].push(tokenCount);
 
-        emit MemeTokenCreated(tokenCount, address(newToken), name, symbol, memeUri, memeScore);
+        emit MemeTokenCreated(tokenCount, address(newToken), name, symbol, memeUri, description);
         return tokenCount;
     }
 
