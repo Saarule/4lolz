@@ -9,5 +9,10 @@ export const chainConfig = {
     rpcUrl: 'https://sepolia.optimism.io',
     blockExplorerUrl: 'https://sepolia-optimism.etherscan.io/',
   },
+  36630: {
+    chainName: 'LOLZ Testnet',
+    rpcUrl: 'https://rpc-test-2-f4ko9l2lxm.t.conduit.xyz',
+    blockExplorerUrl: 'https://explorer-test-2-f4ko9l2lxm.t.conduit.xyz',
+  },
   // Add more chains as needed
 };
