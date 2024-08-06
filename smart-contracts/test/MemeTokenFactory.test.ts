@@ -21,9 +21,9 @@ describe("MemeTokenFactory", function () {
     const tokenSymbol = "DOGE";
     const initialSupply = ethers.utils.parseEther("1000000");
     const memeUri = "https://example.com/doge.jpg";
-    const memeScore = 95;
+    const description = "Much wow, very coin!";
 
-    await memeTokenFactory.createMemeToken(tokenName, tokenSymbol, initialSupply, memeUri, memeScore);
+    await memeTokenFactory.createMemeToken(tokenName, tokenSymbol, initialSupply, memeUri, description);
 
     const creatorTokens = await memeTokenFactory.getCreatorTokens(owner.address);
     expect(creatorTokens.length).to.equal(1);
@@ -31,7 +31,7 @@ describe("MemeTokenFactory", function () {
   });
 
   it("Should store correct token addresses", async function () {
-    await memeTokenFactory.createMemeToken("Token1", "TK1", ethers.utils.parseEther("1000000"), "uri1", 90);
+    await memeTokenFactory.createMemeToken("Token1", "TK1", ethers.utils.parseEther("1000000"), "uri1", "First token description");
     const tokenAddress = await memeTokenFactory.memeTokens(1);
     const MemeTokenContractFactory = await ethers.getContractFactory("MemeToken");
     const token = MemeTokenContractFactory.attach(tokenAddress) as MemeToken;
@@ -39,18 +39,17 @@ describe("MemeTokenFactory", function () {
     expect(await token.name()).to.equal("Token1");
     expect(await token.symbol()).to.equal("TK1");
     expect(await token.memeUri()).to.equal("uri1");
-    expect(await token.memeScore()).to.equal(90);
+    expect(await token.description()).to.equal("First token description");
   });
 
   it("Should allow transferring meme tokens", async function () {
     const initialSupply = ethers.utils.parseEther("1000");
-    await memeTokenFactory.createMemeToken("Transfer Token", "TRF", initialSupply, "uri", 80);
+    await memeTokenFactory.createMemeToken("Transfer Token", "TRF", initialSupply, "uri", "Transferrable token");
     const tokenAddress = await memeTokenFactory.memeTokens(1);
     const MemeTokenContractFactory = await ethers.getContractFactory("MemeToken");
     const token = MemeTokenContractFactory.attach(tokenAddress) as MemeToken;
 
     const ownerBalance = await token.balanceOf(owner.address);
-    console.log("Owner balance after creation:", ownerBalance.toString());
     expect(ownerBalance).to.equal(initialSupply);
 
     const transferAmount = ethers.utils.parseEther("100");
@@ -61,22 +60,23 @@ describe("MemeTokenFactory", function () {
   });
 
   it("Should correctly increment token count", async function () {
-    await memeTokenFactory.createMemeToken("Token1", "TK1", ethers.utils.parseEther("1000000"), "uri1", 90);
-    await memeTokenFactory.createMemeToken("Token2", "TK2", ethers.utils.parseEther("500000"), "uri2", 85);
-    await memeTokenFactory.createMemeToken("Token3", "TK3", ethers.utils.parseEther("750000"), "uri3", 80);
+    await memeTokenFactory.createMemeToken("Token1", "TK1", ethers.utils.parseEther("1000000"), "uri1", "Description 1");
+    await memeTokenFactory.createMemeToken("Token2", "TK2", ethers.utils.parseEther("500000"), "uri2", "Description 2");
+    await memeTokenFactory.createMemeToken("Token3", "TK3", ethers.utils.parseEther("750000"), "uri3", "Description 3");
 
     expect(await memeTokenFactory.tokenCount()).to.equal(3);
   });
 
   it("Should not allow creating a token with zero initial supply", async function () {
     await expect(
-      memeTokenFactory.createMemeToken("Zero Token", "ZERO", 0, "uri", 50)
+      memeTokenFactory.createMemeToken("Zero Token", "ZERO", 0, "uri", "Zero supply token")
     ).to.be.revertedWith("Initial supply must be greater than zero");
   });
 
-  it("Should not allow creating a token with meme score greater than 100", async function () {
+  it("Should not allow creating a token with description longer than 280 characters", async function () {
+    const longDescription = "a".repeat(281);
     await expect(
-      memeTokenFactory.createMemeToken("Invalid Score", "INV", ethers.utils.parseEther("1000"), "uri", 101)
-    ).to.be.revertedWith("Meme score must be between 0 and 100");
+      memeTokenFactory.createMemeToken("Long Description", "LONG", ethers.utils.parseEther("1000"), "uri", longDescription)
+    ).to.be.revertedWith("Description must be 280 characters or less");
   });
 });
