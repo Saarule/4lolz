@@ -13,10 +13,11 @@ const GoldskyAnalytics = () => {
       setIsLoading(true);
       try {
         // Replace this URL with your actual Goldsky API endpoint
-        const response = await fetch('https://api.goldsky.com/api/public/project_clsomeproject/subgraphs/meme-finance/1.0.0/gql', {
+        const response = await fetch(process.env.GOLDSKY_API_ENDPOINT, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.GOLDSKY_API_KEY}`,
           },
           body: JSON.stringify({
             query: `
@@ -37,11 +38,24 @@ const GoldskyAnalytics = () => {
           }),
         });
 
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const result = await response.json();
+        
+        if (result.errors) {
+          throw new Error(result.errors[0].message);
+        }
+
+        if (!result.data || !result.data.memecoins) {
+          throw new Error("Unexpected data structure in response");
+        }
+
         setAnalyticsData(result.data.memecoins);
       } catch (err) {
         console.error("Error fetching Goldsky data:", err);
-        setError("Failed to fetch analytics data");
+        setError(err.message || "Failed to fetch analytics data");
       } finally {
         setIsLoading(false);
       }
