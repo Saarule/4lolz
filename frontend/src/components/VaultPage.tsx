@@ -1,74 +1,153 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useBlockchain } from '../hooks/useBlockchain';
 import { ethers } from 'ethers';
+import { useBlockchain } from '../hooks/useBlockchain';
+import { chainConfig } from '../utils/chainConfig';
 import FuturisticBackground from './FuturisticBackground';
 import GlowingButton from './GlowingButton';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader, TrendingUp, BarChart2, ArrowDownCircle, ArrowUpCircle, RefreshCw, DollarSign, Info, ExternalLink, HelpCircle } from 'lucide-react';
-import { chainConfig } from '../utils/chainConfig';
+import { Loader, TrendingUp, BarChart2, ArrowDownCircle, ArrowUpCircle, RefreshCw, DollarSign, Info, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { Tooltip as ReactTooltip } from 'react-tooltip';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-const VaultPage = () => {
-  const { vaultContract, tokenContract, address, connect, disconnect, switchNetwork, chainId } = useBlockchain();
-  const [vaultData, setVaultData] = useState(null);
+const SUPPORTED_CHAIN_IDS = Object.keys(chainConfig).map(Number);
+
+interface VaultData {
+  balance: string;
+  yieldRate: string;
+  totalAssets: string;
+  lolBalance: string;
+  lolSymbol: string;
+  lolName: string;
+  rwrBalance: string;
+  yieldBooster: string;
+  maxDepositLimit: string;
+  maxWithdrawLimit: string;
+  lastUpdate: number;
+}
+
+const VaultPage: React.FC = () => {
+  const { vaultContract, lolTokenContract, rwrTokenContract, address, connect, disconnect, switchNetwork, chainId } = useBlockchain();
+  const [vaultData, setVaultData] = useState<VaultData | null>(null);
   const [depositAmount, setDepositAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [showInfo, setShowInfo] = useState(false);
-  const [earningsHistory, setEarningsHistory] = useState([]);
+  const [earningsHistory, setEarningsHistory] = useState<any[]>([]);
   const [compoundPeriod, setCompoundPeriod] = useState(30); // days
 
+  useEffect(() => {
+    if (chainId) {
+      console.log("Connected to network:", chainId);
+      if (!SUPPORTED_CHAIN_IDS.includes(chainId)) {
+        console.error("Unsupported network. Please switch to a supported network.");
+        toast.error("Unsupported network. Please switch to a supported network.");
+      }
+    }
+  }, [chainId]);
+
+  useEffect(() => {
+    console.log("Contracts initialized:", {
+      vaultContract: !!vaultContract,
+      lolTokenContract: !!lolTokenContract,
+      rwrTokenContract: !!rwrTokenContract
+    });
+    
+    if (vaultContract && lolTokenContract && rwrTokenContract && address) {
+      fetchVaultData();
+    } else {
+      console.log("Not all contracts or address available, skipping data fetch");
+    }
+  }, [vaultContract, lolTokenContract, rwrTokenContract, address]);
+
   const fetchVaultData = useCallback(async () => {
-    if (!vaultContract || !tokenContract || !address) return;
+    console.log("Fetching vault data...");
+    console.log("Contracts available:", { 
+      vaultContract: !!vaultContract, 
+      lolTokenContract: !!lolTokenContract,
+      rwrTokenContract: !!rwrTokenContract
+    });
+    console.log("User address:", address);
+
+    if (!vaultContract || !lolTokenContract || !rwrTokenContract || !address) {
+      console.warn("Missing required data for fetching vault data");
+      setIsLoading(false);
+      return;
+    }
 
     try {
       setIsLoading(true);
       setError(null);
 
-      const [balanceWei, yieldRateWei, totalAssetsWei, tokenBalanceWei, tokenSymbol, tokenName] = await Promise.all([
+      const [
+        balanceWei,
+        yieldRateWei,
+        totalAssetsWei,
+        lolBalanceWei,
+        lolSymbol,
+        lolName,
+        rwrBalanceWei,
+        yieldBooster,
+        maxDepositLimit,
+        maxWithdrawLimit
+      ] = await Promise.all([
         vaultContract.balanceOf(address),
         vaultContract.yieldRate(),
         vaultContract.totalAssets(),
-        tokenContract.balanceOf(address),
-        tokenContract.symbol(),
-        tokenContract.name()
+        lolTokenContract.balanceOf(address),
+        lolTokenContract.symbol(),
+        lolTokenContract.name(),
+        rwrTokenContract.balanceOf(address),
+        vaultContract.yieldBooster(address),
+        vaultContract.maxDepositLimit(),
+        vaultContract.maxWithdrawLimit()
       ]);
 
-      const balanceEth = ethers.utils.formatEther(balanceWei);
-      const yieldRateFormatted = ethers.utils.formatUnits(yieldRateWei, 2);
-      
-      const newVaultData = {
-        balance: balanceEth,
-        yieldRate: yieldRateFormatted,
+      console.log("Raw data fetched:", {
+        balanceWei: balanceWei.toString(),
+        yieldRateWei: yieldRateWei.toString(),
+        totalAssetsWei: totalAssetsWei.toString(),
+        lolBalanceWei: lolBalanceWei.toString(),
+        lolSymbol,
+        lolName,
+        rwrBalanceWei: rwrBalanceWei.toString(),
+        yieldBooster: yieldBooster.toString(),
+        maxDepositLimit: maxDepositLimit.toString(),
+        maxWithdrawLimit: maxWithdrawLimit.toString()
+      });
+
+      const newVaultData: VaultData = {
+        balance: ethers.utils.formatEther(balanceWei),
+        yieldRate: ethers.utils.formatUnits(yieldRateWei, 2),
         totalAssets: ethers.utils.formatEther(totalAssetsWei),
-        tokenBalance: ethers.utils.formatEther(tokenBalanceWei),
-        tokenSymbol,
-        tokenName,
+        lolBalance: ethers.utils.formatEther(lolBalanceWei),
+        lolSymbol,
+        lolName,
+        rwrBalance: ethers.utils.formatEther(rwrBalanceWei),
+        yieldBooster: ethers.utils.formatUnits(yieldBooster, 2),
+        maxDepositLimit: ethers.utils.formatEther(maxDepositLimit),
+        maxWithdrawLimit: ethers.utils.formatEther(maxWithdrawLimit),
         lastUpdate: Date.now()
       };
 
+      console.log("Processed vault data:", newVaultData);
+
       setVaultData(newVaultData);
-      generateEarningsHistory(balanceEth, yieldRateFormatted);
+      generateEarningsHistory(newVaultData.balance, newVaultData.yieldRate);
 
     } catch (err) {
       console.error("Error fetching vault data:", err);
-      setError("Failed to fetch vault data: " + err.message);
+      setError("Failed to fetch vault data: " + (err as Error).message);
       toast.error("Failed to fetch vault data. Please try again.");
     } finally {
       setIsLoading(false);
     }
-  }, [vaultContract, tokenContract, address]);
+  }, [vaultContract, lolTokenContract, rwrTokenContract, address]);
 
-  useEffect(() => {
-    fetchVaultData();
-  }, [fetchVaultData]);
-
-  const generateEarningsHistory = (balance, yieldRate) => {
+  const generateEarningsHistory = (balance: string, yieldRate: string) => {
     const yieldRateFloat = parseFloat(yieldRate) / 100;
     const history = [];
     let currentBalance = parseFloat(balance);
@@ -85,32 +164,35 @@ const VaultPage = () => {
     setEarningsHistory(history);
   };
 
-  const handleDeposit = async (e) => {
+  const handleDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!vaultContract || !tokenContract) return;
+    if (!vaultContract || !lolTokenContract) return;
 
     try {
       setError(null);
       const amountWei = ethers.utils.parseEther(depositAmount);
 
-      // Approve vault to spend tokens
-      const approveTx = await tokenContract.approve(vaultContract.address, amountWei);
+      console.log("Approving LOL token spend...");
+      const approveTx = await lolTokenContract.approve(vaultContract.address, amountWei);
       await approveTx.wait();
+      console.log("LOL token spend approved");
 
-      // Deposit tokens
+      console.log("Depositing LOL tokens...");
       const depositTx = await vaultContract.deposit(amountWei, address);
       await depositTx.wait();
+      console.log("Deposit successful");
 
       toast.success("Deposit successful!");
       setDepositAmount('');
       fetchVaultData();
     } catch (err) {
-      setError("Failed to deposit: " + err.message);
+      console.error("Error during deposit:", err);
+      setError("Failed to deposit: " + (err as Error).message);
       toast.error("Failed to deposit. Please try again.");
     }
   };
 
-  const handleWithdraw = async (e) => {
+  const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!vaultContract) return;
 
@@ -118,15 +200,37 @@ const VaultPage = () => {
       setError(null);
       const amountWei = ethers.utils.parseEther(withdrawAmount);
 
+      console.log("Withdrawing LOL tokens...");
       const withdrawTx = await vaultContract.withdraw(amountWei, address, address);
       await withdrawTx.wait();
+      console.log("Withdrawal successful");
 
       toast.success("Withdrawal successful!");
       setWithdrawAmount('');
       fetchVaultData();
     } catch (err) {
-      setError("Failed to withdraw: " + err.message);
+      console.error("Error during withdrawal:", err);
+      setError("Failed to withdraw: " + (err as Error).message);
       toast.error("Failed to withdraw. Please try again.");
+    }
+  };
+
+  const handleClaimYield = async () => {
+    if (!vaultContract) return;
+
+    try {
+      setError(null);
+      console.log("Claiming RWR yield...");
+      const claimTx = await vaultContract.claimYield();
+      await claimTx.wait();
+      console.log("RWR yield claimed successfully");
+
+      toast.success("RWR yield claimed successfully!");
+      fetchVaultData();
+    } catch (err) {
+      console.error("Error claiming RWR yield:", err);
+      setError("Failed to claim RWR yield: " + (err as Error).message);
+      toast.error("Failed to claim RWR yield. Please try again.");
     }
   };
 
@@ -137,12 +241,13 @@ const VaultPage = () => {
       const balanceWei = await vaultContract.balanceOf(address);
       setWithdrawAmount(ethers.utils.formatEther(balanceWei));
     } catch (err) {
-      setError("Failed to set maximum withdrawal amount: " + err.message);
+      console.error("Error setting maximum withdrawal amount:", err);
+      setError("Failed to set maximum withdrawal amount: " + (err as Error).message);
       toast.error("Failed to set maximum withdrawal amount. Please try again.");
     }
   };
 
-  const calculateRealTimeAmount = (amount, isDeposit) => {
+  const calculateRealTimeAmount = (amount: string, isDeposit: boolean) => {
     if (!amount || !vaultData) return '0';
     const amountFloat = parseFloat(amount);
     const yieldRateFloat = parseFloat(vaultData.yieldRate) / 100;
@@ -189,8 +294,8 @@ const VaultPage = () => {
                 value={chainId || ''}
                 className="bg-gray-800 text-white p-2 rounded"
               >
-                {Object.entries(chainConfig).map(([id, config]) => (
-                  <option key={id} value={id}>{config.chainName}</option>
+                {SUPPORTED_CHAIN_IDS.map((id) => (
+                  <option key={id} value={id}>{chainConfig[id].chainName}</option>
                 ))}
               </select>
               <span>{address.slice(0, 6)}...{address.slice(-4)}</span>
@@ -232,26 +337,35 @@ const VaultPage = () => {
                     exit={{ opacity: 0, height: 0 }}
                     className="bg-gray-800 p-4 rounded-lg mb-4"
                   >
-                    <p>This vault allows you to deposit {vaultData.tokenSymbol} tokens and earn yield. The yield rate is variable and can change over time. Your earnings are automatically compounded.</p>
+                    <p>This vault allows you to deposit {vaultData.lolSymbol} tokens and earn yield in RWR tokens. The yield rate is variable and can change over time. Your earnings are not automatically compounded but can be claimed as RWR tokens.</p>
                   </motion.div>
                 )}
               </AnimatePresence>
-              <p className="mb-2">Your Vault Balance: {parseFloat(vaultData.balance).toFixed(4)} m{vaultData.tokenSymbol}</p>
-              <p className="mb-2">Your Token Balance: {parseFloat(vaultData.tokenBalance).toFixed(4)} {vaultData.tokenSymbol}</p>
-              <p className="mb-2">Total Assets in Vault: {parseFloat(vaultData.totalAssets).toFixed(4)} {vaultData.tokenSymbol}</p>
+              <p className="mb-2">Your Vault Balance: {parseFloat(vaultData.balance).toFixed(4)} m{vaultData.lolSymbol}</p>
+              <p className="mb-2">Your {vaultData.lolSymbol} Balance: {parseFloat(vaultData.lolBalance).toFixed(4)} {vaultData.lolSymbol}</p>
+              <p className="mb-2">Your RWR Balance: {parseFloat(vaultData.rwrBalance).toFixed(4)} RWR</p>
+              <p className="mb-2">Total Assets in Vault: {parseFloat(vaultData.totalAssets).toFixed(4)} {vaultData.lolSymbol}</p>
               <p className="flex items-center mb-2">
-                <TrendingUp className="mr-2" /> Yield Rate: {vaultData.yieldRate}% daily
+                <TrendingUp className="mr-2" /> Base Yield Rate: {vaultData.yieldRate}% daily
               </p>
               <p className="flex items-center mb-2">
-                <DollarSign className="mr-2" /> Your Earnings: {calculateRealTimeEarnings()} {vaultData.tokenSymbol}
+                <TrendingUp className="mr-2" /> Your Yield Booster: {vaultData.yieldBooster}%
               </p>
+              <p className="flex items-center mb-2">
+                <DollarSign className="mr-2" /> Claimable Yield: {calculateRealTimeEarnings()} RWR
+              </p>
+              <p className="mb-2">Max Deposit Limit: {vaultData.maxDepositLimit} {vaultData.lolSymbol}</p>
+              <p className="mb-2">Max Withdraw Limit: {vaultData.maxWithdrawLimit} {vaultData.lolSymbol}</p>
               <div className="flex justify-between items-center mt-4">
                 <GlowingButton onClick={fetchVaultData} className="flex items-center justify-center">
                   <RefreshCw className="mr-2" /> Refresh Data
                 </GlowingButton>
-                <Link href={`/dex?token=${vaultData.tokenSymbol}`}>
+                <GlowingButton onClick={handleClaimYield} className="flex items-center justify-center">
+                  Claim RWR Yield
+                </GlowingButton>
+                <Link href={`/dex?token=${vaultData.lolSymbol}`}>
                   <GlowingButton className="flex items-center justify-center">
-                    Buy {vaultData.tokenSymbol} <ExternalLink className="ml-2" />
+                    Buy {vaultData.lolSymbol} <ExternalLink className="ml-2" />
                   </GlowingButton>
                 </Link>
               </div>
@@ -262,28 +376,28 @@ const VaultPage = () => {
               className="bg-white bg-opacity-10 p-6 rounded-xl shadow-lg neon-border"
             >
               <h3 className="text-2xl font-semibold mb-4 flex items-center">
-                <ArrowUpCircle className="mr-2" /> Deposit {vaultData.tokenSymbol}
+                <ArrowUpCircle className="mr-2" /> Deposit {vaultData.lolSymbol}
               </h3>
               <form onSubmit={handleDeposit} className="space-y-4">
                 <input
                   type="text"
-                  placeholder={`Amount to deposit (${vaultData.tokenSymbol})`}
+                  placeholder={`Amount to deposit (${vaultData.lolSymbol})`}
                   value={depositAmount}
                   onChange={(e) => setDepositAmount(e.target.value)}
                   className="w-full bg-white bg-opacity-20 p-2 rounded-lg text-white placeholder-gray-400 futuristic-input"
                 />
-                <p className="text-sm">You will receive: {calculateRealTimeAmount(depositAmount, true)} m{vaultData.tokenSymbol}</p>
+                <p className="text-sm">You will receive: {depositAmount} m{vaultData.lolSymbol}</p>
                 <GlowingButton type="submit" className="w-full">Deposit</GlowingButton>
               </form>
 
               <h3 className="text-2xl font-semibold my-4 flex items-center">
-                <ArrowDownCircle className="mr-2" /> Withdraw {vaultData.tokenSymbol}
+                <ArrowDownCircle className="mr-2" /> Withdraw {vaultData.lolSymbol}
               </h3>
               <form onSubmit={handleWithdraw} className="space-y-4">
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder={`Amount to withdraw (${vaultData.tokenSymbol})`}
+                    placeholder={`Amount to withdraw (${vaultData.lolSymbol})`}
                     value={withdrawAmount}
                     onChange={(e) => setWithdrawAmount(e.target.value)}
                     className="w-full bg-white bg-opacity-20 p-2 rounded-lg text-white placeholder-gray-400 futuristic-input pr-20"
@@ -296,7 +410,7 @@ const VaultPage = () => {
                     Max
                   </button>
                 </div>
-                <p className="text-sm">You will receive: {calculateRealTimeAmount(withdrawAmount, false)} {vaultData.tokenSymbol}</p>
+                <p className="text-sm">You will receive: {calculateRealTimeAmount(withdrawAmount, false)} {vaultData.lolSymbol}</p>
                 <GlowingButton type="submit" className="w-full">Withdraw</GlowingButton>
               </form>
             </motion.div>
@@ -311,7 +425,7 @@ const VaultPage = () => {
               whileHover={{ scale: 1.05 }}
               className="bg-white bg-opacity-10 p-6 rounded-xl shadow-lg neon-border"
             >
-<h3 className="text-2xl font-semibold mb-4">Earnings Projection</h3>
+              <h3 className="text-2xl font-semibold mb-4">Earnings Projection</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={earningsHistory}>
                   <XAxis dataKey="day" />
@@ -339,7 +453,7 @@ const VaultPage = () => {
               <p>
                 Estimated balance after {compoundPeriod} days:
                 {' '}
-                {calculateCompoundInterest()} {vaultData.tokenSymbol}
+                {calculateCompoundInterest()} {vaultData.lolSymbol}
               </p>
             </motion.div>
           </div>
